@@ -16,9 +16,7 @@ class __TwigTemplate_7eef8b4d62027a394e295f1621b469fb66593b93814f79602a0e5306400
     protected function doDisplay(array $context, array $blocks = array())
     {
         // line 1
-        echo "<?php
-defined('BASEPATH') OR exit('No direct script access allowed');
-?><!DOCTYPE html>
+        echo "<!DOCTYPE html>
 <html lang=\"en\">
 <head>
 \t<meta charset=\"utf-8\">
@@ -101,7 +99,7 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 \t</div>
 
 \t<p class=\"footer\">Page rendered in <strong>{elapsed_time}</strong> seconds. ";
-        // line 85
+        // line 83
         if (((isset($context["ENVIRONMENT"]) ? $context["ENVIRONMENT"] : null) == "development")) {
             echo "   'CodeIgniter Version <strong>' . CI_VERSION . '</strong>' ";
         }
@@ -124,6 +122,6 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 
     public function getDebugInfo()
     {
-        return array (  105 => 85,  19 => 1,);
+        return array (  103 => 83,  19 => 1,);
     }
 }

@@ -58,7 +58,6 @@ class Twig
 	public function render($view, $params = [])
 	{
 		$this->createTwig();
-
 		$view = $view . '.twig';
 		$CI =& get_instance();
 		$CI->output->set_output($this->twig->render($view, $params));
