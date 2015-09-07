@@ -12,7 +12,8 @@
 	},
 	"require": {
 		"php": ">=5.2.4",
-		"kenjis/codeigniter-ss-twig": "1.0.x@dev"
+		"kenjis/codeigniter-ss-twig": "1.0.x@dev",
+		"dsv/attire": "^1.2"
 	},
 	"require-dev": {
 		"mikey179/vfsStream": "1.1.*"
