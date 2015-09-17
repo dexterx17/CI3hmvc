@@ -28,3 +28,13 @@ Llamada a instancia de modulo:
 <code>
  $modulo = modules::load("modulo");
 </code>
+
+Retornar contenido de una vista
+<code>
+ $contenido = $this->twig->render('vista.html.twig',parametros=array());
+</code>
+
+Visualizar contenido de una vista
+<code>
+ $contenido = $this->twig->display('vista.html.twig',parametros=array());
+</code>
