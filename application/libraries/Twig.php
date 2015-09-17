@@ -136,14 +136,20 @@ class Twig
 		$this->loader = $loader;
 	}
 
+	public function display($view, $params = [])
+	{ 
+		$params = array_merge($this->_data,$params);
+		$view = $view . '.html.twig';
+		$CI =& get_instance();
+		$CI->output->set_output($this->twig->display($view, $params));
+	}
+	
 	public function render($view, $params = [])
 	{ 
-	//	$this->createTwig();
 		$params = array_merge($this->_data,$params);
-		$view = $view . $this->config['template_file_ext'];
+		$view = $view . '.html.twig';
 		$CI =& get_instance();
-		//$CI->output->set_output($this->_load()->render($view, $params));
-		$CI->output->set_output($this->twig->render($view, $params));
+		return $CI->output->set_output($this->twig->render($view, $params));
 	}
 
 	private function addCIFunctions()
