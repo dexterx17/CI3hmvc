@@ -1,155 +1,234 @@
-<?php if ( ! defined('BASEPATH')) exit('No direct script access allowed');
+<?php
 /**
- * Library to wrap Twig layout engine. Originally from Bennet Matschullat.
- * Code cleaned up to CodeIgniter standards by Erik Torsner
+ * Part of CodeIgniter Simple and Secure Twig
  *
- * PHP Version 5.3
- *
- * @category Layout
- * @package  Twig
- * @author   Bennet Matschullat <bennet@3mweb.de>
- * @author   Erik Torsner <erik@torgesta.com>
- * @license  Don't be a dick http://www.dbad-license.org/
- * @link     https://github.com/bmatschullat/Twig-Codeigniter
+ * @author     Kenji Suzuki <https://github.com/kenjis>
+ * @license    MIT License
+ * @copyright  2015 Kenji Suzuki
+ * @link       https://github.com/kenjis/codeigniter-ss-twig
  */
-/**
- * Main (and only) class for the Twig wrapper library
- * 
- * @category Layout
- * @package  Twig
- * @author   Bennet Matschullat <hello@bennet-matschullat.com>
- * @author   Erik Torsner <erik@torgesta.com>
- * @license  Don't be a dick http://www.dbad-license.org/
- * @link     https://github.com/bmatschullat/Twig-Codeigniter
- */
-class Twig {
-    const 		TWIG_CONFIG_FILE = 'twig';
-	/**
-	 * Path to templates. Usually application/views.
-	 * 
-	 * @var string
-	 */
-	protected $template_dir;
-	/**
-	 * Path to cache.  Usually applcation/cache.
-	 * 
-	 * @var string
-	 */
-	protected $cache_dir;
-	/**
-	 * Reference to code CodeIgniter instance.
-	 * 
-	 * @var CodeIgniter object
-	 */
-	private $_ci;
-	/**
-	 * Twig environment see http://twig.sensiolabs.org/api/v1.8.1/Twig_Environment.html.
-	 * 
-	 * @var Twig_Envoronment object
-	 */
-	private $_twig_env;
-	/**
-	 * constructor of twig ci class
-	 */
-	public function __construct() 
+class Twig
+{
+	/*private $functions_asis = [
+		'base_url', 'site_url'
+	];
+	private $functions_safe = [
+		'form_open', 'form_close', 'form_error', 'set_value', 'form_hidden'
+	];*/
+	private $twig;
+	private $loader;
+	private $CI;
+	private $_template_locations = array();
+	private $_themes_base_dir;
+	private $_module;
+	private $_globals = array();
+	private $_data = array();
+	private $config;
+	public function __construct()
 	{
-		$this->_ci = & get_instance();
-		$this->_ci->config->load(self::TWIG_CONFIG_FILE); // load config file
-		// set include path for twig
-		ini_set('include_path', ini_get('include_path') . PATH_SEPARATOR . APPPATH . 'third_party/Twig/lib/Twig');
-		require_once (string)'Autoloader.php';
-		// register autoloader
-		Twig_Autoloader::register();
-		log_message('debug', 'twig autoloader loaded');
-		// init paths
-		$this->template_dir = $this->_ci->config->item('template_dir');
-		$this->cache_dir = $this->_ci->config->item('cache_dir');
-		// load environment
-		$loader = new Twig_Loader_Filesystem($this->template_dir, $this->cache_dir);
-		$this->_twig_env = new Twig_Environment($loader, array(
-			'cache' => $this->cache_dir,
-			'auto_reload' => TRUE));
-		$this->ci_function_init();
+		if (ENVIRONMENT === 'production')
+		{
+			$debug = FALSE;
+		}
+		else
+		{
+			$debug = TRUE;
+		}
+		$this->CI =& get_instance();
+		$this->config = $this->CI->config->item('twig');
+		$this->_themes_base_dir = APPPATH . $this->config['themes_base_dir'];
+		$this->setTemplateLocations($this->config['default_theme']);
+		if ($this->loader === null) {
+			$this->loader = new \Twig_Loader_Filesystem($this->_template_locations);
+//			$this->loader = new \Twig_Loader_Filesystem([VIEWPATH]);
+		}
+		$twig = new \Twig_Environment($this->loader, [
+			'cache'      => APPPATH . '/cache/twig',
+			'debug'      => $debug,
+			'autoescape' => TRUE,
+		]);
+		if ($debug)
+		{
+			$twig->addExtension(new \Twig_Extension_Debug());
+		}
+		$this->twig = $twig;
+		
+		$this->theme($this->config['default_theme'])
+			 ->layout($this->config['default_layout']);
+			 //->template($this->_config['default_template']);
+		$this->addCIFunctions();
+	}
+	
+	public function theme($theme)
+	{
+		if(!is_dir(realpath($this->_themes_base_dir. $theme)))
+		{
+			log_message('error', 'Twiggy: requested theme '. $theme .' has not been loaded because it does not exist.');
+			show_error("Theme does not exist in {$this->_themes_base_dir}{$theme}.");
+		}
+		$this->_theme = $theme;
+		$this->setTemplateLocations($theme);
+		return $this;
+	}
+	public function layout($name)
+	{
+		$this->_layout = $name;
+		//$this->_twig->addGlobal('_layout', '_layouts/'. $this->_layout . $this->config['template_file_ext']);
+		$this->twig->addGlobal('_layout', '_layouts/'. $this->_layout . $this->config['template_file_ext']);
+		return $this;
+	}
+	
+	/**
+	* Set template locations
+	*
+	* @access	private
+	* @param 	string	name of theme to load
+	* @return	void
+	*/
+	private function setTemplateLocations($theme)
+	{
+		// Reset template locations array since we loaded a different theme
+		$this->_template_locations = array();
+		
+		// Check if HMVC is installed.
+		// NOTE: there may be a simplier way to check it but this seems good enough.
+		if(method_exists($this->CI->router, 'fetch_module'))
+		{
+			$this->_module = $this->CI->router->fetch_module();
+			// Only if the current page is served from a module do we need to add extra template locations.
+			if(!empty($this->_module))
+			{
+				$module_locations = Modules::$locations;
+				foreach($module_locations as $loc => $offset)
+				{
+					/* Only add the template location if the same exists, otherwise
+					you'll need always a directory for your templates, even your module
+					won't use templates */
+					if ( is_dir($loc . $this->_module . '/' . $this->config['themes_base_dir'] . $theme) )
+						$this->_template_locations[] = $loc . $this->_module . '/' . $this->config['themes_base_dir'] . $theme;
+				}
+			}
+		}
+		$this->_template_locations[] =  $this->_themes_base_dir . $theme;
+		// Reset the paths if needed.
+		if(is_object($this->loader))
+		{
+			$this->loader->setPaths($this->_template_locations);
+		}
+	}
+	public function setLoader($loader)
+	{
+		$this->loader = $loader;
+	}
+	public function display($view, $params = [])
+	{ 
+		$params = array_merge($this->_data,$params);
+		$view = $view . '.html.twig';
+		$CI =& get_instance();
+		$CI->output->set_output($this->twig->display($view, $params));
+	}
+	
+	public function render($view, $params = [])
+	{ 
+		$params = array_merge($this->_data,$params);
+		$view = $view . '.html.twig';
+		$CI =& get_instance();
+		return $CI->output->set_output($this->twig->render($view, $params));
+	}
+	private function addCIFunctions()
+	{
+		// as is functions
+		foreach ($this->config['functions_asis'] as $function)
+		{
+			if (function_exists($function))
+			{
+				$this->twig->addFunction(
+					new \Twig_SimpleFunction(
+						$function,
+						$function
+					)
+				);
+			}
+		}
+		// safe functions
+		foreach ($this->config['functions_safe'] as $function)
+		{
+			if (function_exists($function))
+			{
+				$this->twig->addFunction(
+					new \Twig_SimpleFunction(
+						$function,
+						$function,
+						['is_safe' => ['html']]
+					)
+				);
+			}
+		}
+		// customized functions
+		if (function_exists('anchor'))
+		{
+			$this->twig->addFunction(
+				new \Twig_SimpleFunction(
+					'anchor',
+					[$this, 'safe_anchor'],
+					['is_safe' => ['html']]
+				)
+			);
+		}
 	}
 	/**
-	 * render a twig template file
-	 * 
-	 * @param string  $template template name
-	 * @param array   $data	    contains all varnames
-	 * @param boolean $render   render or return raw?
-	 *
-	 * @return void
-	 * 
+	 * @param string $uri
+	 * @param string $title
+	 * @param array $attributes [changed] only array is acceptable
+	 * @return string
 	 */
-	public function render($template, $data = array(), $render = TRUE) 
+	public function safe_anchor($uri = '', $title = '', $attributes = [])
 	{
-		$template = $this->_twig_env->loadTemplate($template);
-		log_message('debug', 'twig template loaded');
-		return ($render) ? $template->render($data) : $template;
+		$uri = html_escape($uri);
+		$title = html_escape($title);
+		
+		$new_attr = [];
+		foreach ($attributes as $key => $val)
+		{
+			$new_attr[html_escape($key)] = html_escape($val);
+		}
+		return anchor($uri, $title, $new_attr);
 	}
 	/**
-	 * Execute the template and send to CI output
-	 * 
-	 * @param string $template Name of template
-	 * @param array  $data     Parameters for template
-	 * 
-	 * @return void
-	 * 
+	 * @return \Twig_Environment
 	 */
-	public function display($template, $data = array()) 
+	public function getTwig()
 	{
-		$template = $this->_twig_env->loadTemplate($template);
-		$this->_ci->output->set_output($template->render($data));
+		return $this->twig;
 	}
+	
 	/**
-	 * Entry point for controllers (and the likes) to register
-	 * callback functions to be used from Twig templates
+	 * Set data
 	 * 
-	 * @param string                 $name     name of function
-	 * @param Twig_FunctionInterface $function Function pointer
-	 * 
-	 * @return void
-	 * 
+	 * @access	public
+	 * @param 	mixed  	key (variable name) or an array of variable names with values
+	 * @param 	mixed  	data
+	 * @param 	boolean	(optional) is this a global variable?
+	 * @return	object 	instance of this class
 	 */
-	public function register_function($name, Twig_FunctionInterface $function) 
+	public function set($key, $value, $global = FALSE)
 	{
-		$this->_twig_env->addFunction($name, $function);
-	}
-	/**
-	 * Initialize standard CI functions
-	 * 
-	 * @return void
-	 */
-	public function ci_function_init() 
-	{
-		$this->_twig_env->addFunction('base_url', new Twig_Function_Function('base_url'));
-		$this->_twig_env->addFunction('site_url', new Twig_Function_Function('site_url'));
-		$this->_twig_env->addFunction('current_url', new Twig_Function_Function('current_url'));
-		// form functions
-		$this->_twig_env->addFunction('form_open', new Twig_Function_Function('form_open'));
-		$this->_twig_env->addFunction('form_hidden', new Twig_Function_Function('form_hidden'));
-		$this->_twig_env->addFunction('form_input', new Twig_Function_Function('form_input'));
-		$this->_twig_env->addFunction('form_password', new Twig_Function_Function('form_password'));
-		$this->_twig_env->addFunction('form_upload', new Twig_Function_Function('form_upload'));
-		$this->_twig_env->addFunction('form_textarea', new Twig_Function_Function('form_textarea'));
-		$this->_twig_env->addFunction('form_dropdown', new Twig_Function_Function('form_dropdown'));
-		$this->_twig_env->addFunction('form_multiselect', new Twig_Function_Function('form_multiselect'));
-		$this->_twig_env->addFunction('form_fieldset', new Twig_Function_Function('form_fieldset'));
-		$this->_twig_env->addFunction('form_fieldset_close', new Twig_Function_Function('form_fieldset_close'));
-		$this->_twig_env->addFunction('form_checkbox', new Twig_Function_Function('form_checkbox'));
-		$this->_twig_env->addFunction('form_radio', new Twig_Function_Function('form_radio'));
-		$this->_twig_env->addFunction('form_submit', new Twig_Function_Function('form_submit'));
-		$this->_twig_env->addFunction('form_label', new Twig_Function_Function('form_label'));
-		$this->_twig_env->addFunction('form_reset', new Twig_Function_Function('form_reset'));
-		$this->_twig_env->addFunction('form_button', new Twig_Function_Function('form_button'));
-		$this->_twig_env->addFunction('form_close', new Twig_Function_Function('form_close'));
-		$this->_twig_env->addFunction('form_prep', new Twig_Function_Function('form_prep'));
-		$this->_twig_env->addFunction('set_value', new Twig_Function_Function('set_value'));
-		$this->_twig_env->addFunction('set_select', new Twig_Function_Function('set_select'));
-		$this->_twig_env->addFunction('set_checkbox', new Twig_Function_Function('set_checkbox'));
-		$this->_twig_env->addFunction('set_radio', new Twig_Function_Function('set_radio'));
-		$this->_twig_env->addFunction('form_open_multipart', new Twig_Function_Function('form_open_multipart'));
+		if(is_array($key))
+		{
+			foreach($key as $k => $v) $this->set($k, $v, $global);
+		}
+		else
+		{
+			if($global)
+			{
+				$this->twig->addGlobal($key, $value);
+				$this->_globals[$key] = $value;
+			}
+			else
+			{
+			 	$this->_data[$key] = $value;
+			}	
+		}
+		return $this;
 	}
 }
-/* End of file Twig.php */
-/* Location: ./libraries/Twig.php */

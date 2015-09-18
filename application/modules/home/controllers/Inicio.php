@@ -3,6 +3,6 @@
 class Inicio extends MX_Controller {
     public function index()
     {
-        $this->twig->render('inicio');
+        $this->twig->display('inicio');
     }
 }
